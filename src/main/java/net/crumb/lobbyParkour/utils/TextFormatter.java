@@ -11,6 +11,106 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Map;
 
 public class TextFormatter {
+    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+
+    /**
+     * Parses MiniMessage while also accepting Minecraft's legacy color codes.
+     * Supported legacy formats include {@code &d}, {@code §d}, and
+     * {@code &#ff55ff}.
+     */
+    public static Component deserialize(String text) {
+        if (text == null) {
+            return Component.empty();
+        }
+
+        return MINI_MESSAGE.deserialize(convertLegacyCodes(text));
+    }
+
+    static String convertLegacyCodes(String text) {
+        StringBuilder converted = new StringBuilder(text.length());
+
+        for (int i = 0; i < text.length(); i++) {
+            char current = text.charAt(i);
+            if ((current != '&' && current != '§') || i + 1 >= text.length()) {
+                converted.append(current);
+                continue;
+            }
+
+            char code = Character.toLowerCase(text.charAt(i + 1));
+
+            // Bukkit's expanded legacy hex format: &x&R&R&G&G&B&B (and §x...).
+            if (code == 'x' && i + 13 < text.length()) {
+                StringBuilder hex = new StringBuilder(6);
+                boolean valid = true;
+                for (int part = 0; part < 6; part++) {
+                    int separator = i + 2 + part * 2;
+                    int digit = separator + 1;
+                    if (text.charAt(separator) != current || !isHexDigit(text.charAt(digit))) {
+                        valid = false;
+                        break;
+                    }
+                    hex.append(text.charAt(digit));
+                }
+                if (valid) {
+                    converted.append("<#").append(hex).append('>');
+                    i += 13;
+                    continue;
+                }
+            }
+
+            // Common modern legacy hex syntax: &#RRGGBB
+            if (code == '#' && i + 7 < text.length()) {
+                String hex = text.substring(i + 2, i + 8);
+                if (hex.chars().allMatch(TextFormatter::isHexDigit)) {
+                    converted.append("<#").append(hex).append('>');
+                    i += 7;
+                    continue;
+                }
+            }
+
+            String tag = switch (code) {
+                case '0' -> "black";
+                case '1' -> "dark_blue";
+                case '2' -> "dark_green";
+                case '3' -> "dark_aqua";
+                case '4' -> "dark_red";
+                case '5' -> "dark_purple";
+                case '6' -> "gold";
+                case '7' -> "gray";
+                case '8' -> "dark_gray";
+                case '9' -> "blue";
+                case 'a' -> "green";
+                case 'b' -> "aqua";
+                case 'c' -> "red";
+                case 'd' -> "light_purple";
+                case 'e' -> "yellow";
+                case 'f' -> "white";
+                case 'k' -> "obfuscated";
+                case 'l' -> "bold";
+                case 'm' -> "strikethrough";
+                case 'n' -> "underlined";
+                case 'o' -> "italic";
+                case 'r' -> "reset";
+                default -> null;
+            };
+
+            if (tag == null) {
+                converted.append(current);
+                continue;
+            }
+
+            converted.append('<').append(tag).append('>');
+            i++;
+        }
+
+        return converted.toString();
+    }
+
+    private static boolean isHexDigit(int character) {
+        return character >= '0' && character <= '9'
+                || character >= 'a' && character <= 'f'
+                || character >= 'A' && character <= 'F';
+    }
 
     /**
      * Formats a string with custom placeholders, PlaceholderAPI (if enabled), and MiniMessage.
@@ -37,7 +137,7 @@ public class TextFormatter {
             formatted = PlaceholderAPI.setPlaceholders(player, formatted);
         }
 
-        return MiniMessage.miniMessage().deserialize(formatted);
+        return deserialize(formatted);
     }
 
 

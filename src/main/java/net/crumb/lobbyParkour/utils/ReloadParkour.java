@@ -22,8 +22,15 @@ public class ReloadParkour {
     private static final LobbyParkour plugin = LobbyParkour.getInstance();
     private static final TextFormatter textFormatter = new TextFormatter();
 
+    /** Refreshes all stored holograms without sending a player-facing message. */
+    public static void reload() {
+        reload(null);
+    }
+
     public static void reload(Player player) {
-        MMUtils.sendMessage(player, "Reloading all parkours...", MessageType.INFO);
+        if (player != null) {
+            MMUtils.sendMessage(player, "Reloading all parkours...", MessageType.INFO);
+        }
 
         try {
             ParkoursDatabase database = new ParkoursDatabase(plugin.getDataFolder().getAbsolutePath() + "/lobby_parkour.db");
@@ -94,13 +101,38 @@ public class ReloadParkour {
                 query.updateEndEntityUuid(name, display.getUniqueId());
             }
 
-            MMUtils.sendMessage(player, "Parkours reloaded successfully!", MessageType.INFO);
-            SoundUtils.playSoundSequence(player, Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f, 0);
-            SoundUtils.playSoundSequence(player, Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 2.0f, 4);
+            // Existing checkpoint entities survive a plugin reload too. Update
+            // their text in place so legacy color codes are applied immediately.
+            for (Object[] checkpoint : query.getCheckpoints()) {
+                int parkourId = (int) checkpoint[5];
+                String parkourName = query.getParkourNameById(parkourId);
+                Location location = LocationHelper.stringToLocation((String) checkpoint[2]);
+                Entity entity = location == null || location.getWorld() == null
+                        ? null : location.getWorld().getEntity((UUID) checkpoint[4]);
+                if (!(entity instanceof TextDisplay textDisplay) || parkourName == null) continue;
+
+                int total = query.getCheckpoints(parkourId).size();
+                Component checkpointText = textFormatter.formatString(
+                        ConfigManager.getFormat().getCheckpointPlate(),
+                        Map.of(
+                                "parkour_name", parkourName,
+                                "checkpoint", String.valueOf(checkpoint[1]),
+                                "checkpoint_total", String.valueOf(total)
+                        ));
+                textDisplay.text(checkpointText);
+            }
+
+            if (player != null) {
+                MMUtils.sendMessage(player, "Parkours reloaded successfully!", MessageType.INFO);
+                SoundUtils.playSoundSequence(player, Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f, 0);
+                SoundUtils.playSoundSequence(player, Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 2.0f, 4);
+            }
 
         } catch (SQLException ex) {
             ex.printStackTrace();
-            MMUtils.sendMessage(player, "There was an error while reloading the parkours!", MessageType.ERROR);
+            if (player != null) {
+                MMUtils.sendMessage(player, "There was an error while reloading the parkours!", MessageType.ERROR);
+            }
         }
     }
 }

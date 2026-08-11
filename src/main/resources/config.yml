@@ -2,7 +2,8 @@
 #
 #                           LOBBY PARKOUR - BY CRUMB
 #
-# This config supports PlaceholderAPI and MiniMessage. Custom placeholders
+# This config supports PlaceholderAPI, MiniMessage, and legacy color codes such
+# as &d, §d, and &#ff55ff. Custom placeholders
 # are written BEFORE the field where they can be used.
 #
 # NOTE: PlaceholderAPI is not supported in all settings at the moment.
@@ -32,11 +33,11 @@ items:
 
 formatting:
   # %parkour_name% -> The name of the parkour
-  start-plate: "<green>⚑</green> <white>%parkour_name%</white>"
-  end-plate: "<red>⚑</red> <white>%parkour_name%</white>"
+  start-plate: "<green>⚑</green> %parkour_name%"
+  end-plate: "<red>⚑</red> %parkour_name%"
   # %checkpoint% -> The number of the checkpoint
   # %checkpoint_total% -> The total number of checkpoints (excluding start and end)
-  checkpoint-plate: "<blue>⚑</blue> <gray>(%checkpoint%/%checkpoint_total%) <white>%parkour_name%</white>"
+  checkpoint-plate: "<blue>⚑</blue> <gray>(%checkpoint%/%checkpoint_total%) %parkour_name%"
 
   # %m% -> Minutes
   # %s% -> Seconds

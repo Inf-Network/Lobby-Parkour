@@ -9,6 +9,7 @@ import net.crumb.lobbyParkour.systems.ParkourSession;
 import net.crumb.lobbyParkour.systems.ParkourSessionManager;
 import net.crumb.lobbyParkour.utils.ConfigManager;
 import net.crumb.lobbyParkour.utils.ItemActionHandler;
+import net.crumb.lobbyParkour.utils.ReloadParkour;
 import net.crumb.lobbyParkour.utils.SchedulerUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -81,6 +82,9 @@ public final class LobbyParkour extends JavaPlugin {
 
         // Delay the updater init to ensure everything is ready
         SchedulerUtils.runTask(this, () -> {
+            // Rebuild stored plate holograms so updated formatting (including
+            // legacy color codes) also applies to entities from older runs.
+            ReloadParkour.reload();
             LeaderboardUpdater updater = LeaderboardUpdater.getInstance();
             updater.updateCache();
             updater.updateFormat();

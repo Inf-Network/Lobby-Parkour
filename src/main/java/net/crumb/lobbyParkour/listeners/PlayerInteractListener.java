@@ -22,9 +22,13 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.MenuType;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -40,6 +44,7 @@ public class PlayerInteractListener implements Listener {
     private static final LobbyParkour plugin = LobbyParkour.getInstance();
     private static final TextFormatter textFormatter = new TextFormatter();
     private static final LeaderboardUpdater updater = LeaderboardUpdater.getInstance();
+    private final Map<UUID, Location> occupiedPressurePlates = new HashMap<>();
 
     private final ConfigManager.Items itemConfig = ConfigManager.getItems();
     private final ParkourItem lastCheckpointProps = new ParkourItem(
@@ -59,6 +64,40 @@ public class PlayerInteractListener implements Listener {
             itemConfig.getLeaveAmount(),
             itemConfig.getLeaveName()
     );
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerMove(PlayerMoveEvent event) {
+        Location occupiedPlate = occupiedPressurePlates.get(event.getPlayer().getUniqueId());
+        if (occupiedPlate == null || event.getTo() == null) return;
+
+        Location from = event.getFrom();
+        Location to = event.getTo();
+        // Only XYZ block movement matters. yaw/pitch are intentionally ignored.
+        if (isSameBlock(from, to)) {
+            return;
+        }
+
+        // The clicked block is the plate itself, while the player's feet are
+        // normally one block above it. Compare the player's occupied block
+        // instead of comparing the two locations directly.
+        if (!isPlayerOnPlate(event.getTo(), occupiedPlate)) {
+            occupiedPressurePlates.remove(event.getPlayer().getUniqueId());
+        }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        clearOccupiedPlate(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        clearOccupiedPlate(event.getPlayer());
+    }
+
+    private void clearOccupiedPlate(Player player) {
+        occupiedPressurePlates.remove(player.getUniqueId());
+    }
 
 
     @EventHandler
@@ -150,6 +189,14 @@ public class PlayerInteractListener implements Listener {
             Block block = event.getClickedBlock();
             if (block != null && isPressurePlate(block.getType())) {
                 Location location = block.getLocation();
+                UUID playerUuid = player.getUniqueId();
+                Location occupiedPlate = occupiedPressurePlates.get(playerUuid);
+
+                // PHYSICAL may be fired repeatedly while a player remains on a plate.
+                // Only a transition onto this block should activate it again.
+                if (isSameBlock(occupiedPlate, location)) return;
+                occupiedPressurePlates.put(playerUuid, location);
+
                 boolean isPkStart = false;
                 boolean isPkEnd = false;
                 boolean isCheckpoint = false;
@@ -440,5 +487,35 @@ public class PlayerInteractListener implements Listener {
                 loc1.getBlockX() == loc2.getBlockX() &&
                 loc1.getBlockY() == loc2.getBlockY() &&
                 loc1.getBlockZ() == loc2.getBlockZ();
+    }
+
+    private static boolean isSameBlock(Location first, Location second) {
+        if (first == null || second == null || first.getWorld() == null || second.getWorld() == null) {
+            return false;
+        }
+
+        return first.getWorld().equals(second.getWorld())
+                && first.getBlockX() == second.getBlockX()
+                && first.getBlockY() == second.getBlockY()
+                && first.getBlockZ() == second.getBlockZ();
+    }
+
+    private static boolean isPlayerOnPlate(Location playerLocation, Location plateLocation) {
+        if (playerLocation == null || plateLocation == null
+                || playerLocation.getWorld() == null || plateLocation.getWorld() == null) {
+            return false;
+        }
+
+        // Use the player's actual feet height with a small tolerance. The
+        // exact Y value can differ slightly depending on the plate material,
+        // crouching, and server movement correction; yaw/pitch changes do not
+        // affect this check.
+        double feetY = playerLocation.getY();
+        double plateY = plateLocation.getY();
+        return playerLocation.getWorld().equals(plateLocation.getWorld())
+                && playerLocation.getBlockX() == plateLocation.getBlockX()
+                && playerLocation.getBlockZ() == plateLocation.getBlockZ()
+                && feetY >= plateY + 0.5
+                && feetY < plateY + 2.5;
     }
 }
